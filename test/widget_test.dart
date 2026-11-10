@@ -79,17 +79,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Rp 25.000'), findsNWidgets(2));
-    expect(find.text('1 catatan'), findsOneWidget);
+    expect(find.text('1 catatan bulan ini'), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('expense_name')), 'Kopi');
     await tester.enterText(find.byKey(const Key('expense_amount')), '10000');
     await tester.tap(find.byKey(const Key('save_expense')));
     await tester.pumpAndSettle();
 
-    expect(find.text('2 catatan'), findsOneWidget);
+    expect(find.text('2 catatan bulan ini'), findsOneWidget);
     await tester.tap(find.byKey(const Key('open_history')));
     await tester.pumpAndSettle();
-    expect(find.text('Riwayat Pengeluaran'), findsOneWidget);
+    expect(find.text('Pengeluaran per Bulan'), findsOneWidget);
+    await tester.tap(
+      find.byKey(Key('month_${expenseMonthKey(DateTime.now())}')),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Makan siang'), findsOneWidget);
     expect(find.text('Makan siang di kantor'), findsOneWidget);
     expect(find.text('Catatan terbaru'), findsOneWidget);
@@ -124,6 +128,47 @@ void main() {
     final remaining = await store.load();
     expect(remaining, hasLength(1));
     expect(remaining.single.name, 'Kopi');
+  });
+
+  testWidgets('monthly total resets while older expenses remain by month',
+      (tester) async {
+    final now = DateTime.now();
+    final previousMonth = DateTime(now.year, now.month - 1, 15);
+    final currentMonthExpense = ExpenseEntry(
+      name: 'Belanja bulan ini',
+      amount: 12500,
+      category: 'Belanja',
+      createdAt: now,
+    );
+    final previousMonthExpense = ExpenseEntry(
+      name: 'Belanja bulan lalu',
+      amount: 50000,
+      category: 'Belanja',
+      createdAt: previousMonth,
+    );
+    final store = ExpenseHistoryStore(storage: MemoryHistoryStorage());
+    await store.save([currentMonthExpense, previousMonthExpense]);
+
+    await tester.pumpWidget(ExpenseApp(historyStore: store));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rp 12.500'), findsNWidgets(2));
+    expect(find.text('1 catatan bulan ini'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('open_history')));
+    await tester.pumpAndSettle();
+    expect(find.text('Pengeluaran per Bulan'), findsOneWidget);
+    expect(find.byKey(Key('month_${expenseMonthKey(now)}')), findsOneWidget);
+    expect(
+      find.byKey(Key('month_${expenseMonthKey(previousMonth)}')),
+      findsOneWidget,
+    );
+    expect(find.text('Belanja bulan lalu'), findsNothing);
+    await tester.tap(
+      find.byKey(Key('month_${expenseMonthKey(previousMonth)}')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Belanja bulan lalu'), findsOneWidget);
   });
 
   testWidgets('adapts to phone and tablet widths without overflow',
